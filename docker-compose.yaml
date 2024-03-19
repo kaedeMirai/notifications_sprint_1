@@ -1,0 +1,79 @@
+version: '3.1'
+
+services:
+
+  api_service:
+    image: api_service
+    container_name: api_container
+    env_file:
+      - ./notifications_service/api_service/.env
+    ports:
+      - "8338:8000"
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+
+  mock_data_api_service:
+    image: mock_data_api_service
+    container_name: mock_data_api_container
+    ports:
+      - "8555:8000"
+
+  mongo:
+    image: mongo
+    restart: always
+    container_name: mongo-container
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: admin
+      MONGO_INITDB_ROOT_PASSWORD: admin
+    ports:
+      - "27023:27017"
+
+  mongo-express:
+    image: mongo-express
+    restart: always
+    container_name: mongo-express-container
+    ports:
+      - "8081:8081"
+    environment:
+      ME_CONFIG_MONGODB_ADMINUSERNAME: admin
+      ME_CONFIG_MONGODB_ADMINPASSWORD: admin
+      ME_CONFIG_MONGODB_URL: mongodb://admin:admin@mongo:27017/
+
+  rabbitmq:
+    image: rabbitmq:3.10.7-management
+    container_name: rabbitmq
+    restart: always
+    environment:
+      - RABBITMQ_DEFAULT_USER=admin
+      - RABBITMQ_DEFAULT_PASS=admin
+      - RABBITMQ_SERVER_ADDITIONAL_ERL_ARGS=-rabbit disk_free_limit 1147483648
+    volumes:
+      - ./rabbitmq:/var/lib/rabbitmq
+    ports:
+      - "15672:15672"
+      - "5672:5672"
+    healthcheck:
+      test: rabbitmq-diagnostics -q ping
+      interval: 30s
+      timeout: 30s
+      retries: 3
+
+  worker:
+    build:
+      context: .
+      dockerfile: notifications_service/worker/docker/Dockerfile
+    volumes:
+      - ./notifications_service/worker/src:/app/src
+    env_file:
+      - ./notifications_service/worker/.env
+    depends_on:
+      - rabbitmq
+
+  mailhog:
+    image: mailhog/mailhog
+    container_name: mailhog
+    ports:
+      - "8025:8025"
+      - "1025:1025"
+    
